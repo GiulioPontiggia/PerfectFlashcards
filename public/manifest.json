@@ -1,0 +1,16 @@
+{
+  "id": ".",
+  "name": "Memo — Flashcards",
+  "short_name": "Memo",
+  "description": "Create, organize, and study your flashcards, even offline.",
+  "lang": "en",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f7f8f5",
+  "theme_color": "#f4f6f1",
+  "icons": [
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
