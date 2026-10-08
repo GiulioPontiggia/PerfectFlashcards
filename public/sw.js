@@ -1,4 +1,4 @@
-const CACHE_PREFIX = 'memo-shell-';
+const CACHE_PREFIX = 'perfectflashcards-shell-';
 const CACHE_NAME = `${CACHE_PREFIX}v1`;
 const BASE_URL = new URL('./', self.location.href);
 const SHELL_URLS = [BASE_URL.href, new URL('manifest.json', BASE_URL).href, new URL('icons/icon.svg', BASE_URL).href];

@@ -1,7 +1,7 @@
 {
   "id": ".",
-  "name": "Memo — Flashcards",
-  "short_name": "Memo",
+  "name": "PerfectFlashcards",
+  "short_name": "PerfectFlashcards",
   "description": "Create, organize, and study your flashcards, even offline.",
   "lang": "en",
   "start_url": "./",

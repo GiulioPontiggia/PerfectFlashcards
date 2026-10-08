@@ -1,4 +1,4 @@
-# Memo — Flashcards
+# PerfectFlashcards
 
 A single-page app for creating and studying Markdown flashcards, with Google Sign-In, offline-first Firestore, CSV import, and Cloudinary images. The PWA is designed for GitHub Pages, Ubuntu desktops, and mobile devices.
 

@@ -18,8 +18,19 @@ import type { Chapter, Deck, Flashcard } from './types';
 
 type Screen = 'library' | 'chapter' | 'study' | 'summary';
 type Draft = { question?: string; answer?: string };
+const imageEditorTag = '🖼 Image';
 const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined;
 const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined;
+
+function imageMarkdownToEditor(markdown: string) {
+  return markdown.replace(/!\[image\]\((https?:\/\/[^)\s]+)\)/gi, imageEditorTag);
+}
+
+function imageEditorToMarkdown(value: string, currentMarkdown: string) {
+  const imageMarkdown = [...currentMarkdown.matchAll(/!\[image\]\((https?:\/\/[^)\s]+)\)/gi)].map(([match]) => match);
+  let imageIndex = 0;
+  return value.replaceAll(imageEditorTag, () => imageMarkdown[imageIndex++] ?? imageEditorTag);
+}
 
 function friendlyError(error: unknown) {
   return error instanceof Error ? error.message : 'Something went wrong. Please try again.';
@@ -45,8 +56,10 @@ function App() {
   const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
   const [menu, setMenu] = useState<{ kind: 'deck' | 'chapter'; id: string } | null>(null);
   const [uploadingId, setUploadingId] = useState('');
+  const [pendingFocusCardId, setPendingFocusCardId] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
   const csvInput = useRef<HTMLInputElement>(null);
+  const answerInputs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   useEffect(() => {
     if (!auth) return;
@@ -109,6 +122,12 @@ function App() {
   const studyProgress = studyCards.length ? Math.round(studyCards.reduce((sum, card) => sum + card.rating, 0) / (studyCards.length * 5) * 100) : 0;
   const offline = !isOnline;
 
+  useEffect(() => {
+    if (!pendingFocusCardId || !chapterCards.some((card) => card.id === pendingFocusCardId)) return;
+    answerInputs.current[pendingFocusCardId]?.focus();
+    setPendingFocusCardId('');
+  }, [chapterCards, pendingFocusCardId]);
+
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
     try { await action(); }
@@ -157,17 +176,21 @@ function App() {
     });
   }
 
-  async function addCard() {
+  async function addCard(focusAnswer = false) {
     if (!user || !activeChapter) return;
     await run(async () => {
       const ref = await createCard(user.uid, activeChapter.id, activeChapter.deckId);
       setDrafts((previous) => ({ ...previous, [ref.id]: { question: '', answer: '' } }));
+      if (focusAnswer) setPendingFocusCardId(ref.id);
     });
   }
 
   async function saveField(card: Flashcard, field: 'question' | 'answer', value: string) {
-    if (value === card[field]) return;
-    await run(() => updateCard(card.id, { [field]: value }));
+    const updatedValue = field === 'answer'
+      ? imageEditorToMarkdown(value, drafts[card.id]?.answer ?? card.answer)
+      : value;
+    if (updatedValue === card[field]) return;
+    await run(() => updateCard(card.id, { [field]: updatedValue }));
   }
 
   async function importCsv(file?: File) {
@@ -189,8 +212,8 @@ function App() {
     if (csvInput.current) csvInput.current.value = '';
   }
 
-  async function uploadImage(file?: File) {
-    const cardId = uploadingId;
+  async function uploadImage(file?: File, targetCardId = uploadingId) {
+    const cardId = targetCardId;
     if (!file || !cardId) return;
     if (!cloudName || !uploadPreset) { setToast('Configure Cloudinary in .env to upload images'); return; }
     await run(async () => {
@@ -245,7 +268,7 @@ function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><div className="brand-mark"><Layers3 size={20} /></div><span>memo<span className="brand-period">.</span></span></div>
+        <div className="brand"><div className="brand-mark"><Layers3 size={20} /></div><span>PerfectFlashcards</span></div>
         <button className={`nav-item ${screen === 'library' || screen === 'chapter' ? 'active' : ''}`} onClick={() => setScreen('library')}><BookOpen size={18} /> My library</button>
         <div className="sidebar-section"><span>YOUR DECKS</span><button className="icon-button quiet" title="Create deck" onClick={addNewDeck}><Plus size={17} /></button></div>
         <div className="deck-list">
@@ -298,19 +321,19 @@ function App() {
             </aside>
             <div className="chapter-workspace">
               {activeChapter ? <>
-                <div className="workspace-header"><div><h2>{activeChapter.name}</h2><span>{chapterCards.length} flashcards</span></div><div className="workspace-actions"><input ref={csvInput} hidden type="file" accept=".csv,text/csv" onChange={(event) => importCsv(event.target.files?.[0])} /><button className="button secondary deck-study-button" onClick={() => startStudy(deckChapters.map((chapter) => chapter.id))}><GraduationCap size={16} /> Study deck</button><button className="button secondary" onClick={() => csvInput.current?.click()}><FileUp size={16} /> Import CSV</button><button className="button primary" onClick={addCard}><Plus size={17} /> New card</button></div></div>
+                <div className="workspace-header"><div><h2>{activeChapter.name}</h2><span>{chapterCards.length} flashcards</span></div><div className="workspace-actions"><input ref={csvInput} hidden type="file" accept=".csv,text/csv" onChange={(event) => importCsv(event.target.files?.[0])} /><button className="button secondary deck-study-button" onClick={() => startStudy(deckChapters.map((chapter) => chapter.id))}><GraduationCap size={16} /> Study deck</button><button className="button secondary" onClick={() => csvInput.current?.click()}><FileUp size={16} /> Import CSV</button><button className="button primary" onClick={() => addCard()}><Plus size={17} /> New card</button></div></div>
                 <div className="column-labels"><span>QUESTION</span><span>ANSWER <small>MARKDOWN</small></span></div>
                 <div className="cards-list">
                   {chapterCards.map((card, index) => <article key={card.id} className="editor-card">
                     <div className="card-number">{String(index + 1).padStart(2, '0')}</div>
                     <div className="editor-column"><textarea aria-label={`Question ${index + 1}`} placeholder="Write a question…" value={drafts[card.id]?.question ?? card.question} onChange={(event) => setDrafts((previous) => ({ ...previous, [card.id]: { ...previous[card.id], question: event.target.value } }))} onBlur={(event) => saveField(card, 'question', event.target.value)} /></div>
                     <div className="editor-column answer-column">
-                      {preview[card.id] ? <div className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]}>{drafts[card.id]?.answer ?? card.answer}</ReactMarkdown></div> : <textarea aria-label={`Answer ${index + 1}`} placeholder="Write an answer… Markdown supported" value={drafts[card.id]?.answer ?? card.answer} onChange={(event) => setDrafts((previous) => ({ ...previous, [card.id]: { ...previous[card.id], answer: event.target.value } }))} onBlur={(event) => saveField(card, 'answer', event.target.value)} />}
+                      {preview[card.id] ? <div className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]}>{drafts[card.id]?.answer ?? card.answer}</ReactMarkdown></div> : <textarea ref={(element) => { answerInputs.current[card.id] = element; }} aria-label={`Answer ${index + 1}`} placeholder="Write an answer… Markdown supported" value={imageMarkdownToEditor(drafts[card.id]?.answer ?? card.answer)} onChange={(event) => setDrafts((previous) => ({ ...previous, [card.id]: { ...previous[card.id], answer: imageEditorToMarkdown(event.target.value, previous[card.id]?.answer ?? card.answer) } }))} onBlur={(event) => saveField(card, 'answer', event.target.value)} onKeyDown={(event) => { if (event.key === 'Tab' && !event.shiftKey && index === chapterCards.length - 1) { event.preventDefault(); void addCard(true); } }} onPaste={(event) => { const imageItem = Array.from(event.clipboardData.items).find((item) => item.type.startsWith('image/')); const imageFile = imageItem?.getAsFile(); if (imageFile) { event.preventDefault(); void uploadImage(imageFile, card.id); } }} />}
                       <div className="editor-tools"><button title="Upload an image" onClick={() => { setUploadingId(card.id); fileInput.current?.click(); }}><ImagePlus size={15} /> Image</button><button onClick={() => setPreview((previous) => ({ ...previous, [card.id]: !previous[card.id] }))}>{preview[card.id] ? 'Edit' : 'Preview'}</button><button className="delete-card" title="Delete flashcard" onClick={() => window.confirm('Delete this flashcard?') && run(() => removeCard(card.id))}><Trash2 size={15} /></button></div>
                     </div>
                   </article>)}
                 </div>
-                {!chapterCards.length && <div className="empty-state compact"><div className="empty-illustration"><CircleHelp size={27} /></div><h3>This chapter is ready</h3><p>Add a card or import a CSV with questions and answers.</p><div className="empty-actions"><button className="button primary" onClick={addCard}><Plus size={16} /> Add card</button><button className="button secondary" onClick={() => csvInput.current?.click()}><Upload size={16} /> Import CSV</button></div></div>}
+                {!chapterCards.length && <div className="empty-state compact"><div className="empty-illustration"><CircleHelp size={27} /></div><h3>This chapter is ready</h3><p>Add a card or import a CSV with questions and answers.</p><div className="empty-actions"><button className="button primary" onClick={() => addCard()}><Plus size={16} /> Add card</button><button className="button secondary" onClick={() => csvInput.current?.click()}><Upload size={16} /> Import CSV</button></div></div>}
                 <input ref={fileInput} hidden type="file" accept="image/*" onChange={(event) => uploadImage(event.target.files?.[0])} />
               </> : <div className="empty-state compact"><div className="empty-illustration"><FolderPlus size={28} /></div><h3>Choose a chapter</h3><p>Open a chapter from the list or create a new one.</p><button className="button primary" onClick={addNewChapter}><Plus size={16} /> Create chapter</button></div>}
             </div>
@@ -320,7 +343,7 @@ function App() {
         {screen === 'study' && <section className="study-page"><div className="study-top"><button className="back-link" onClick={() => setScreen('library')}><ArrowLeft size={16} /> Exit study</button><span className="study-batch">STUDY BATCH
           <span>{studyIndex + 1} / {studyQueue.length}</span></span></div>
           <div className="study-progress"><span style={{ width: `${(studyIndex / Math.max(studyQueue.length, 1)) * 100}%` }} /></div>
-          {currentStudyCard ? <div className="study-center"><div className="study-kicker"><GraduationCap size={16} /> {chapters.find((chapter) => chapter.id === currentStudyCard.chapterId)?.name ?? 'FLASHCARD'}</div><div className="study-card"><div className="study-card-label">{revealed ? 'ANSWER' : 'QUESTION'}</div><div className="study-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{revealed ? currentStudyCard.answer : currentStudyCard.question}</ReactMarkdown></div>{!revealed ? <button className="button primary reveal-button" onClick={() => setRevealed(true)}>Show answer <ChevronDown size={16} /></button> : <div className="rating-area"><span>How did it go?</span><div className="rating-buttons">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} className={`rating-button rating-${rating}`} onClick={() => rateAndContinue(rating)} disabled={busy}><span>{rating}</span><small>{['Again', 'Hard', 'Okay', 'Good', 'Easy'][rating - 1]}</small></button>)}</div></div>}</div><div className="study-hint"><span>Space</span> to reveal the answer <span>·</span> Be honest with yourself</div></div> : <div className="empty-state"><h3>No cards to study</h3>
+          {currentStudyCard ? <div className="study-center"><div className="study-kicker"><GraduationCap size={16} /> {chapters.find((chapter) => chapter.id === currentStudyCard.chapterId)?.name ?? 'FLASHCARD'}</div><div className="study-card"><div className="study-card-label">{revealed ? 'ANSWER' : 'QUESTION'}</div><div className="study-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{revealed ? currentStudyCard.answer : currentStudyCard.question}</ReactMarkdown></div>{!revealed ? <button className="button primary reveal-button" onClick={() => setRevealed(true)}>Show answer <ChevronDown size={16} /></button> : <div className="rating-area"><span>How well did you know it?</span><div className="rating-buttons">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} className={`rating-button rating-${rating}`} onClick={() => rateAndContinue(rating)} disabled={busy}><span>{rating}</span></button>)}</div></div>}</div><div className="study-hint"><span>Space</span> to reveal the answer <span>·</span> Be honest with yourself</div></div> : <div className="empty-state"><h3>No cards to study</h3>
             <button className="button primary" onClick={() => setScreen('library')}>Back to library</button></div>}
         </section>}
 
@@ -341,11 +364,11 @@ function App() {
 }
 
 function LoginScreen({ onLogin, toast }: { onLogin: () => void; toast: string }) {
-  return <main className="login-screen"><div className="login-panel"><div className="brand login-brand"><div className="brand-mark"><Layers3 size={20} /></div><span>memo<span className="brand-period">.</span></span></div><div className="login-copy"><div className="eyebrow"><Sparkles size={14} /> ONE CARD AT A TIME</div><h1>Make room<br />for what you learn.</h1><p>Your ideas, organized as flashcards. Ready to go wherever you are, even offline.</p></div><button className="google-button" onClick={onLogin}><GoogleMark /> Continue with Google</button><div className="login-privacy"><Cloud size={15} /> Your progress syncs securely.</div>{toast && <div className="toast login-toast">{toast}</div>}</div><div className="login-visual"><div className="login-note note-one"><small>DAILY REVIEW</small><strong>Every small<br />step counts.</strong><span>● ● ● ○ ○</span></div><div className="login-note note-two"><div className="mini-mark">✳</div><small>SCIENCE</small><strong>What is<br />neuroplasticity?</strong><div className="note-footer">The brain's ability to adapt</div></div><div className="visual-sun" /><div className="visual-caption">Make what matters<br />memorable.</div></div></main>;
+  return <main className="login-screen"><div className="login-panel"><div className="brand login-brand"><div className="brand-mark"><Layers3 size={20} /></div><span>PerfectFlashcards</span></div><div className="login-copy"><div className="eyebrow"><Sparkles size={14} /> ONE CARD AT A TIME</div><h1>Make room<br />for what you learn.</h1><p>Your ideas, organized as flashcards. Ready to go wherever you are, even offline.</p></div><button className="google-button" onClick={onLogin}><GoogleMark /> Continue with Google</button><div className="login-privacy"><Cloud size={15} /> Your progress syncs securely.</div>{toast && <div className="toast login-toast">{toast}</div>}</div><div className="login-visual"><div className="login-note note-one"><small>DAILY REVIEW</small><strong>Every small<br />step counts.</strong><span>● ● ● ○ ○</span></div><div className="login-note note-two"><div className="mini-mark">✳</div><small>SCIENCE</small><strong>What is<br />neuroplasticity?</strong><div className="note-footer">The brain's ability to adapt</div></div><div className="visual-sun" /><div className="visual-caption">Make what matters<br />memorable.</div></div></main>;
 }
 
 function ConfigurationScreen() {
-  return <main className="config-screen"><div className="config-card"><div className="brand"><div className="brand-mark"><Layers3 size={20} /></div><span>memo<span className="brand-period">.</span></span></div><h1>Connect your workspace.</h1><p>To get started, configure your Firebase credentials in the <strong>.env</strong> file. See the project README for full instructions.</p>
+  return <main className="config-screen"><div className="config-card"><div className="brand"><div className="brand-mark"><Layers3 size={20} /></div><span>PerfectFlashcards</span></div><h1>Connect your workspace.</h1><p>To get started, configure your Firebase credentials in the <strong>.env</strong> file. See the project README for full instructions.</p>
     <div className="config-step"><span>1</span><div><strong>Create the configuration file</strong><small>Copy .env.example to .env and enter your Firebase app settings.</small></div></div>
     <div className="config-step"><span>2</span><div><strong>Enable Google Sign-In</strong><small>Enable the Google provider in the Firebase Authentication console.</small></div></div></div></main>;
 }
