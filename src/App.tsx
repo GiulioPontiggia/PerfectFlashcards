@@ -81,7 +81,7 @@ function App() {
   const [pendingFocusCardId, setPendingFocusCardId] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
   const csvInput = useRef<HTMLInputElement>(null);
-  const answerInputs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const questionInputs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   useEffect(() => {
     if (!auth) return;
@@ -146,7 +146,7 @@ function App() {
 
   useEffect(() => {
     if (!pendingFocusCardId || !chapterCards.some((card) => card.id === pendingFocusCardId)) return;
-    answerInputs.current[pendingFocusCardId]?.focus();
+    questionInputs.current[pendingFocusCardId]?.focus();
     setPendingFocusCardId('');
   }, [chapterCards, pendingFocusCardId]);
 
@@ -198,12 +198,12 @@ function App() {
     });
   }
 
-  async function addCard(focusAnswer = false) {
+  async function addCard(focusQuestion = false) {
     if (!user || !activeChapter) return;
     await run(async () => {
       const ref = await createCard(user.uid, activeChapter.id, activeChapter.deckId);
       setDrafts((previous) => ({ ...previous, [ref.id]: { question: '', answer: '' } }));
-      if (focusAnswer) setPendingFocusCardId(ref.id);
+      if (focusQuestion) setPendingFocusCardId(ref.id);
     });
   }
 
@@ -359,9 +359,9 @@ function App() {
                 <div className="cards-list">
                   {chapterCards.map((card, index) => <article key={card.id} className="editor-card">
                     <div className="card-number">{String(index + 1).padStart(2, '0')}</div>
-                    <div className="editor-column"><textarea aria-label={`Question ${index + 1}`} placeholder="Write a question…" value={drafts[card.id]?.question ?? card.question} onChange={(event) => setDrafts((previous) => ({ ...previous, [card.id]: { ...previous[card.id], question: event.target.value } }))} onBlur={(event) => saveField(card, 'question', event.target.value)} /></div>
+                    <div className="editor-column"><textarea ref={(element) => { questionInputs.current[card.id] = element; }} aria-label={`Question ${index + 1}`} placeholder="Write a question…" value={drafts[card.id]?.question ?? card.question} onChange={(event) => setDrafts((previous) => ({ ...previous, [card.id]: { ...previous[card.id], question: event.target.value } }))} onBlur={(event) => saveField(card, 'question', event.target.value)} /></div>
                     <div className="editor-column answer-column">
-                      {preview[card.id] ? <div className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]}>{drafts[card.id]?.answer ?? card.answer}</ReactMarkdown></div> : <textarea ref={(element) => { answerInputs.current[card.id] = element; }} aria-label={`Answer ${index + 1}`} placeholder="Write an answer… Markdown supported" value={imageMarkdownToEditor(drafts[card.id]?.answer ?? card.answer)} onChange={(event) => setDrafts((previous) => ({ ...previous, [card.id]: { ...previous[card.id], answer: imageEditorToMarkdown(event.target.value, previous[card.id]?.answer ?? card.answer) } }))} onBlur={(event) => saveField(card, 'answer', event.target.value)} onKeyDown={(event) => { if (event.key === 'Tab' && !event.shiftKey && index === chapterCards.length - 1) { event.preventDefault(); void addCard(true); } }} onPaste={(event) => { const imageItem = Array.from(event.clipboardData.items).find((item) => item.type.startsWith('image/')); const imageFile = imageItem?.getAsFile(); if (imageFile) { event.preventDefault(); void uploadImage(imageFile, card.id); } }} />}
+                      {preview[card.id] ? <div className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]}>{drafts[card.id]?.answer ?? card.answer}</ReactMarkdown></div> : <textarea aria-label={`Answer ${index + 1}`} placeholder="Write an answer… Markdown supported" value={imageMarkdownToEditor(drafts[card.id]?.answer ?? card.answer)} onChange={(event) => setDrafts((previous) => ({ ...previous, [card.id]: { ...previous[card.id], answer: imageEditorToMarkdown(event.target.value, previous[card.id]?.answer ?? card.answer) } }))} onBlur={(event) => saveField(card, 'answer', event.target.value)} onKeyDown={(event) => { if (event.key === 'Tab' && !event.shiftKey && index === chapterCards.length - 1) { event.preventDefault(); void addCard(true); } }} onPaste={(event) => { const imageItem = Array.from(event.clipboardData.items).find((item) => item.type.startsWith('image/')); const imageFile = imageItem?.getAsFile(); if (imageFile) { event.preventDefault(); void uploadImage(imageFile, card.id); } }} />}
                       <div className="editor-tools"><button title="Upload an image" onClick={() => { setUploadingId(card.id); fileInput.current?.click(); }}><ImagePlus size={15} /> Image</button><button onClick={() => setPreview((previous) => ({ ...previous, [card.id]: !previous[card.id] }))}>{preview[card.id] ? 'Edit' : 'Preview'}</button><button className="delete-card" title="Delete flashcard" onClick={() => window.confirm('Delete this flashcard?') && run(() => removeCard(card.id))}><Trash2 size={15} /></button></div>
                     </div>
                   </article>)}
