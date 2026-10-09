@@ -28,7 +28,22 @@ function subscribe<T>(path: string, ownerId: string, callback: (rows: T[]) => vo
 
 export const watchDecks = (uid: string, callback: (rows: Deck[]) => void) => subscribe<Deck>('decks', uid, callback);
 export const watchChapters = (uid: string, callback: (rows: Chapter[]) => void) => subscribe<Chapter>('chapters', uid, callback);
-export const watchCards = (uid: string, callback: (rows: Flashcard[]) => void) => subscribe<Flashcard>('flashcards', uid, callback);
+export const watchCards = (uid: string, callback: (rows: Flashcard[]) => void) => onSnapshot(
+  query(collection(database(), 'flashcards'), where('userId', '==', uid)),
+  (snapshot) => {
+    const rows = snapshot.docs.map((item) => {
+      const data = item.data();
+      if (data.ratingScaleVersion === 2) return { id: item.id, ...data } as Flashcard;
+
+      // Existing cards used a 1–5 scale; migrate them once to the current 0–4 scale.
+      const previousRating = Number(data.rating ?? 0);
+      const rating = data.lastReviewedAt == null ? 0 : Math.max(0, Math.min(4, previousRating - 1));
+      void updateDoc(item.ref, { rating, ratingScaleVersion: 2 });
+      return { ...data, rating, ratingScaleVersion: 2, id: item.id } as unknown as Flashcard;
+    });
+    callback(rows);
+  },
+);
 
 export async function saveProfile(profile: Profile) {
   await setDoc(doc(database(), 'users', profile.id), profile, { merge: true });
@@ -44,7 +59,7 @@ export async function createChapter(userId: string, deckId: string, name: string
 
 export async function createCard(userId: string, chapterId: string, deckId: string, question = '', answer = '') {
   return addDoc(collection(database(), 'flashcards'), {
-    userId, chapterId, deckId, question, answer, rating: 0, lastReviewedAt: null, createdAt: Date.now(),
+    userId, chapterId, deckId, question, answer, rating: 0, ratingScaleVersion: 2, lastReviewedAt: null, createdAt: Date.now(),
   });
 }
 
@@ -55,7 +70,7 @@ export async function createCards(userId: string, chapterId: string, deckId: str
     rows.slice(offset, offset + 450).forEach(({ question, answer }) => {
       const target = doc(collection(firestore, 'flashcards'));
       batch.set(target, {
-        userId, chapterId, deckId, question, answer, rating: 0, lastReviewedAt: null, createdAt: Date.now(),
+        userId, chapterId, deckId, question, answer, rating: 0, ratingScaleVersion: 2, lastReviewedAt: null, createdAt: Date.now(),
       });
     });
     await batch.commit();

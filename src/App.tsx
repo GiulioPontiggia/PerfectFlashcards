@@ -22,6 +22,28 @@ const imageEditorTag = '🖼 Image';
 const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined;
 const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined;
 
+function progressFor(cards: Flashcard[]) {
+  const gradeCounts = [0, 0, 0, 0, 0];
+  let unseen = 0;
+  for (const card of cards) {
+    if (card.lastReviewedAt == null) unseen += 1;
+    else gradeCounts[Math.max(0, Math.min(4, card.rating))] += 1;
+  }
+  const percentage = cards.length
+    ? Math.round(cards.reduce((sum, card) => sum + Math.max(0, Math.min(4, card.rating)), 0) / (cards.length * 4) * 100)
+    : 0;
+  return { percentage, gradeCounts, unseen };
+}
+
+function SegmentedProgress({ cards, className = '' }: { cards: Flashcard[]; className?: string }) {
+  const { percentage, gradeCounts, unseen } = progressFor(cards);
+  const total = cards.length;
+  return <div className={`segmented-progress ${className}`} role="img" aria-label={`${percentage}% progress`}>
+    {gradeCounts.map((count, grade) => count > 0 && <span key={grade} className={`progress-segment grade-${grade + 1}`} style={{ width: `${count / total * 100}%` }} title={`Grade ${grade + 1}: ${count}`} />)}
+    {unseen > 0 && <span className="progress-segment grade-unseen" style={{ width: `${unseen / total * 100}%` }} title={`Not seen yet: ${unseen}`} />}
+  </div>;
+}
+
 function imageMarkdownToEditor(markdown: string) {
   return markdown.replace(/!\[image\]\((https?:\/\/[^)\s]+)\)/gi, imageEditorTag);
 }
@@ -119,7 +141,7 @@ function App() {
   const currentStudyCard = cards.find((card) => card.id === studyQueue[studyIndex]);
   const studyChapters = chapters.filter((chapter) => selectedStudyChapters.includes(chapter.id));
   const studyCards = cards.filter((card) => selectedStudyChapters.includes(card.chapterId));
-  const studyProgress = studyCards.length ? Math.round(studyCards.reduce((sum, card) => sum + card.rating, 0) / (studyCards.length * 5) * 100) : 0;
+  const studyProgress = progressFor(studyCards).percentage;
   const offline = !isOnline;
 
   useEffect(() => {
@@ -251,8 +273,10 @@ function App() {
     if (!currentStudyCard) return;
     const card = currentStudyCard;
     await run(async () => {
-      await updateCard(card.id, { rating, lastReviewedAt: Date.now() });
-      setCards((previous) => previous.map((item) => item.id === card.id ? { ...item, rating, lastReviewedAt: Date.now() } : item));
+      const points = rating - 1;
+      const lastReviewedAt = Date.now();
+      await updateCard(card.id, { rating: points, lastReviewedAt });
+      setCards((previous) => previous.map((item) => item.id === card.id ? { ...item, rating: points, lastReviewedAt } : item));
       if (studyIndex + 1 >= studyQueue.length) setScreen('summary');
       else { setStudyIndex((index) => index + 1); setRevealed(false); }
     });
@@ -292,13 +316,15 @@ function App() {
           {filteredDecks.length ? <div className="deck-grid">{filteredDecks.map((deck, index) => {
             const deckChapterRows = chapters.filter((chapter) => chapter.deckId === deck.id);
             const deckCards = cards.filter((card) => card.deckId === deck.id);
-            const completion = deckCards.length ? Math.round(deckCards.reduce((sum, card) => sum + card.rating, 0) / (deckCards.length * 5) * 100) : 0;
-            return <article key={deck.id} className={`deck-card tone-${index % 4}`}>
-              <div className="deck-card-top"><div className="deck-icon"><Layers3 size={20} /></div><button className="icon-button" title="Options" onClick={() => setMenu(menu?.id === deck.id ? null : { kind: 'deck', id: deck.id })}><MoreHorizontal size={19} /></button>
+            const completion = progressFor(deckCards).percentage;
+            return <article key={deck.id} className={`deck-card tone-${index % 4}`} role="button" tabIndex={0} aria-label={`Open ${deck.name} deck`}
+              onClick={(event) => { if ((event.target as HTMLElement).closest('button')) return; setActiveDeckId(deck.id); setActiveChapterId(''); setScreen('chapter'); }}
+              onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setActiveDeckId(deck.id); setActiveChapterId(''); setScreen('chapter'); } }}>
+              <div className="deck-card-top"><div className="deck-icon"><Layers3 size={20} /></div><button className="icon-button" title="Options" onClick={(event) => { event.stopPropagation(); setMenu(menu?.id === deck.id ? null : { kind: 'deck', id: deck.id }); }}><MoreHorizontal size={19} /></button>
                 {menu?.kind === 'deck' && menu.id === deck.id && <div className="context-menu card-menu"><button onClick={() => renameItem('deck', deck.id)}>Rename</button><button className="danger-text" onClick={() => removeItem('deck', deck.id)}>Delete deck</button></div>}
               </div>
-              <button className="deck-card-title" onClick={() => { setActiveDeckId(deck.id); setScreen('chapter'); }}>{deck.name}</button>
-              <p>{deckChapterRows.length} chapters · {deckCards.length} cards</p><div className="progress-line"><span style={{ width: `${completion}%` }} /></div><div className="deck-card-footer"><span>{completion}% reviewed</span><button className="text-button" onClick={() => { setActiveDeckId(deck.id); setSelectedStudyChapters(deckChapterRows.map((chapter) => chapter.id)); startStudy(deckChapterRows.map((chapter) => chapter.id)); }}>Study <ChevronRight size={14} /></button></div>
+              <h3 className="deck-card-title">{deck.name}</h3>
+              <p>{deckChapterRows.length} chapters · {deckCards.length} cards</p><div className="deck-progress-row"><SegmentedProgress cards={deckCards} className="deck-progress-bar" /><strong className="deck-progress-percent">{completion}%</strong></div><div className="deck-card-footer"><span>progress</span><button className="text-button" onClick={(event) => { event.stopPropagation(); setActiveDeckId(deck.id); setSelectedStudyChapters(deckChapterRows.map((chapter) => chapter.id)); startStudy(deckChapterRows.map((chapter) => chapter.id)); }}>Study <ChevronRight size={14} /></button></div>
             </article>;
           })}<button className="new-deck-card" onClick={addNewDeck}><span><Plus size={20} /></span><strong>Create a deck</strong><small>Organize a new subject</small></button></div> : <div className="empty-state"><div className="empty-illustration"><BookOpen size={30} /></div><h3>{search ? 'No decks found' : 'Start with a new idea'}</h3><p>{search ? 'Try a different search term.' : 'Create your first deck and collect your flashcards here.'}</p>
             {!search && <button className="button primary" onClick={addNewDeck}><Plus size={16} /> Create your first deck</button>}</div>}
@@ -310,12 +336,19 @@ function App() {
           <div className="chapter-layout">
             <aside className="chapter-nav">
               <div className="subsection-label">CHAPTERS <span>{deckChapters.length}</span></div>
-              {deckChapters.map((chapter) => <div key={chapter.id} className={`chapter-nav-row ${chapter.id === activeChapterId ? 'current' : ''}`}>
-                <button onClick={() => { setActiveChapterId(chapter.id); setScreen('chapter'); }}><BookOpen size={16} /><span>{chapter.name}</span><small>{cards.filter((card) => card.chapterId === chapter.id).length}</small></button>
+              {deckChapters.map((chapter) => {
+                const chapterProgressCards = cards.filter((card) => card.chapterId === chapter.id);
+                const chapterCompletion = progressFor(chapterProgressCards).percentage;
+                return <div key={chapter.id} className="chapter-list-item">
+                <div className={`chapter-nav-row ${chapter.id === activeChapterId ? 'current' : ''}`}>
+                <button onClick={() => { setActiveChapterId(chapter.id); setScreen('chapter'); }}><BookOpen size={16} /><span>{chapter.name}</span><small>{chapterProgressCards.length}</small></button>
                 <input aria-label={`Select ${chapter.name} for study`} className="chapter-study-check" type="checkbox" checked={selectedStudyChapters.includes(chapter.id)} onChange={() => toggleChapterForStudy(chapter.id)} />
                 <button className="icon-button" title="Chapter options" onClick={() => setMenu(menu?.id === chapter.id ? null : { kind: 'chapter', id: chapter.id })}><MoreHorizontal size={16} /></button>
                 {menu?.kind === 'chapter' && menu.id === chapter.id && <div className="context-menu"><button onClick={() => renameItem('chapter', chapter.id)}>Rename</button><button className="danger-text" onClick={() => removeItem('chapter', chapter.id)}>Delete</button></div>}
-              </div>)}
+                </div>
+                {chapterProgressCards.length > 0 && <div className="chapter-progress-row"><SegmentedProgress cards={chapterProgressCards} className="chapter-progress-bar" /><strong>{chapterCompletion}%</strong></div>}
+              </div>;
+              })}
               {!deckChapters.length && <p className="subtle">No chapters yet.</p>}
               <button className="study-selection" disabled={!selectedStudyChapters.some((id) => deckChapters.some((chapter) => chapter.id === id))} onClick={() => startStudy(selectedStudyChapters.filter((id) => deckChapters.some((chapter) => chapter.id === id)))}><GraduationCap size={15} /> Study selection</button>
             </aside>
@@ -343,13 +376,13 @@ function App() {
         {screen === 'study' && <section className="study-page"><div className="study-top"><button className="back-link" onClick={() => setScreen('library')}><ArrowLeft size={16} /> Exit study</button><span className="study-batch">STUDY BATCH
           <span>{studyIndex + 1} / {studyQueue.length}</span></span></div>
           <div className="study-progress"><span style={{ width: `${(studyIndex / Math.max(studyQueue.length, 1)) * 100}%` }} /></div>
-          {currentStudyCard ? <div className="study-center"><div className="study-kicker"><GraduationCap size={16} /> {chapters.find((chapter) => chapter.id === currentStudyCard.chapterId)?.name ?? 'FLASHCARD'}</div><div className="study-card"><div className="study-card-label">{revealed ? 'ANSWER' : 'QUESTION'}</div><div className="study-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{revealed ? currentStudyCard.answer : currentStudyCard.question}</ReactMarkdown></div>{!revealed ? <button className="button primary reveal-button" onClick={() => setRevealed(true)}>Show answer <ChevronDown size={16} /></button> : <div className="rating-area"><span>How well did you know it?</span><div className="rating-buttons">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} className={`rating-button rating-${rating}`} onClick={() => rateAndContinue(rating)} disabled={busy}><span>{rating}</span></button>)}</div></div>}</div><div className="study-hint"><span>Space</span> to reveal the answer <span>·</span> Be honest with yourself</div></div> : <div className="empty-state"><h3>No cards to study</h3>
+          {currentStudyCard ? <div className="study-center"><div className="study-kicker"><GraduationCap size={16} /> {chapters.find((chapter) => chapter.id === currentStudyCard.chapterId)?.name ?? 'FLASHCARD'}</div><div className="study-card"><div className="study-card-label">{revealed ? 'ANSWER' : 'QUESTION'}</div><div className="study-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{revealed ? currentStudyCard.answer : currentStudyCard.question}</ReactMarkdown></div>{!revealed ? <button className="button primary reveal-button" onClick={() => setRevealed(true)}>Show answer <ChevronDown size={16} /></button> : <div className="rating-area"><span>How well did you know it?</span><div className="rating-buttons">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} aria-label={`Grade ${rating}`} className={`rating-button rating-${rating}`} onClick={() => rateAndContinue(rating)} disabled={busy}><span>{rating}</span></button>)}</div></div>}</div><div className="study-hint"><span>Space</span> to reveal the answer <span>·</span> Be honest with yourself</div></div> : <div className="empty-state"><h3>No cards to study</h3>
             <button className="button primary" onClick={() => setScreen('library')}>Back to library</button></div>}
         </section>}
 
         {screen === 'summary' && <section className="summary-page"><div className="summary-card"><div className="summary-icon"><Check size={27} /></div><div className="eyebrow">SESSION COMPLETE</div><h1>One step forward.</h1><p className="lead">You've completed your study batch.</p>
           <div className="summary-stat"><strong>{studyProgress}%</strong><span>overall progress<br />across selected content</span></div>
-          <div className="summary-meter"><span style={{ width: `${studyProgress}%` }} /></div>
+          <SegmentedProgress cards={studyCards} className="summary-meter" />
           <div className="summary-meta"><span>{studyCards.length} cards in your selection</span>
             <span>{studyChapters.length} {studyChapters.length === 1 ? 'chapter' : 'chapters'}</span></div>
           <div className="summary-actions"><button className="button secondary" onClick={() => setScreen('library')}>Back to library</button>
