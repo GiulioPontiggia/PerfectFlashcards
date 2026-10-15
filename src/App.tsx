@@ -125,6 +125,16 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const closeMenuOnOutsideClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || target.closest('.context-menu, .menu-trigger')) return;
+      setMenu(null);
+    };
+    document.addEventListener('click', closeMenuOnOutsideClick);
+    return () => document.removeEventListener('click', closeMenuOnOutsideClick);
+  }, []);
+
+  useEffect(() => {
     if (decks.length && !decks.some((deck) => deck.id === activeDeckId)) setActiveDeckId(decks[0].id);
     if (!decks.length) { setActiveDeckId(''); setActiveChapterId(''); }
   }, [decks, activeDeckId]);
@@ -146,7 +156,9 @@ function App() {
 
   useEffect(() => {
     if (!pendingFocusCardId || !chapterCards.some((card) => card.id === pendingFocusCardId)) return;
-    questionInputs.current[pendingFocusCardId]?.focus();
+    const questionInput = questionInputs.current[pendingFocusCardId];
+    questionInput?.closest('.editor-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    questionInput?.focus({ preventScroll: true });
     setPendingFocusCardId('');
   }, [chapterCards, pendingFocusCardId]);
 
@@ -286,6 +298,14 @@ function App() {
     setSelectedStudyChapters((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   }
 
+  function toggleAllChaptersForStudy() {
+    const chapterIds = deckChapters.map((chapter) => chapter.id);
+    const allSelected = chapterIds.length > 0 && chapterIds.every((id) => selectedStudyChapters.includes(id));
+    setSelectedStudyChapters((current) => allSelected
+      ? current.filter((id) => !chapterIds.includes(id))
+      : [...new Set([...current, ...chapterIds])]);
+  }
+
   if (!firebaseConfigured) return <ConfigurationScreen />;
   if (!user) return <LoginScreen onLogin={() => auth && signInWithPopup(auth, googleProvider).catch((error: unknown) => setToast(friendlyError(error)))} toast={toast} />;
 
@@ -298,7 +318,7 @@ function App() {
         <div className="deck-list">
           {decks.map((deck) => <div key={deck.id} className={`deck-row ${activeDeckId === deck.id ? 'selected' : ''}`}>
             <button className="deck-link" onClick={() => { setActiveDeckId(deck.id); setScreen('library'); }}><span className="deck-dot" />{deck.name}</button>
-            <button className="icon-button deck-menu" title="Options deck" onClick={() => setMenu(menu?.id === deck.id ? null : { kind: 'deck', id: deck.id })}><MoreHorizontal size={17} /></button>
+            <button className="icon-button deck-menu menu-trigger" title="Options deck" onClick={() => setMenu(menu?.id === deck.id ? null : { kind: 'deck', id: deck.id })}><MoreHorizontal size={17} /></button>
             {menu?.kind === 'deck' && menu.id === deck.id && <div className="context-menu"><button onClick={() => renameItem('deck', deck.id)}>Rename</button><button className="danger-text" onClick={() => removeItem('deck', deck.id)}>Delete deck</button></div>}
           </div>)}
           {!decks.length && <p className="sidebar-empty">No decks yet</p>}
@@ -320,7 +340,7 @@ function App() {
             return <article key={deck.id} className={`deck-card tone-${index % 4}`} role="button" tabIndex={0} aria-label={`Open ${deck.name} deck`}
               onClick={(event) => { if ((event.target as HTMLElement).closest('button')) return; setActiveDeckId(deck.id); setActiveChapterId(''); setScreen('chapter'); }}
               onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setActiveDeckId(deck.id); setActiveChapterId(''); setScreen('chapter'); } }}>
-              <div className="deck-card-top"><div className="deck-icon"><Layers3 size={20} /></div><button className="icon-button" title="Options" onClick={(event) => { event.stopPropagation(); setMenu(menu?.id === deck.id ? null : { kind: 'deck', id: deck.id }); }}><MoreHorizontal size={19} /></button>
+              <div className="deck-card-top"><div className="deck-icon"><Layers3 size={20} /></div><button className="icon-button menu-trigger" title="Options" onClick={(event) => { event.stopPropagation(); setMenu(menu?.id === deck.id ? null : { kind: 'deck', id: deck.id }); }}><MoreHorizontal size={19} /></button>
                 {menu?.kind === 'deck' && menu.id === deck.id && <div className="context-menu card-menu"><button onClick={() => renameItem('deck', deck.id)}>Rename</button><button className="danger-text" onClick={() => removeItem('deck', deck.id)}>Delete deck</button></div>}
               </div>
               <h3 className="deck-card-title">{deck.name}</h3>
@@ -335,7 +355,7 @@ function App() {
           <div className="chapter-heading"><button className="back-link" onClick={() => setScreen('library')}><ArrowLeft size={16} /> All decks</button><div className="chapter-title-row"><div><div className="eyebrow">{activeDeck?.name ?? 'YOUR DECK'}</div><h1>{activeDeck?.name ?? 'Deck'}</h1><p className="lead">Choose a chapter or create one to organize your cards.</p></div><button className="button primary" onClick={addNewChapter}><Plus size={17} /> New chapter</button></div></div>
           <div className="chapter-layout">
             <aside className="chapter-nav">
-              <div className="subsection-label">CHAPTERS <span>{deckChapters.length}</span></div>
+              <div className="subsection-label">CHAPTERS <input aria-label="Select all chapters for study" className="chapter-study-check select-all-chapters" type="checkbox" checked={deckChapters.length > 0 && deckChapters.every((chapter) => selectedStudyChapters.includes(chapter.id))} onChange={toggleAllChaptersForStudy} /><span>{deckChapters.length}</span></div>
               {deckChapters.map((chapter) => {
                 const chapterProgressCards = cards.filter((card) => card.chapterId === chapter.id);
                 const chapterCompletion = progressFor(chapterProgressCards).percentage;
@@ -343,7 +363,7 @@ function App() {
                 <div className={`chapter-nav-row ${chapter.id === activeChapterId ? 'current' : ''}`}>
                 <button onClick={() => { setActiveChapterId(chapter.id); setScreen('chapter'); }}><BookOpen size={16} /><span>{chapter.name}</span><small>{chapterProgressCards.length}</small></button>
                 <input aria-label={`Select ${chapter.name} for study`} className="chapter-study-check" type="checkbox" checked={selectedStudyChapters.includes(chapter.id)} onChange={() => toggleChapterForStudy(chapter.id)} />
-                <button className="icon-button" title="Chapter options" onClick={() => setMenu(menu?.id === chapter.id ? null : { kind: 'chapter', id: chapter.id })}><MoreHorizontal size={16} /></button>
+                <button className="icon-button menu-trigger" title="Chapter options" onClick={() => setMenu(menu?.id === chapter.id ? null : { kind: 'chapter', id: chapter.id })}><MoreHorizontal size={16} /></button>
                 {menu?.kind === 'chapter' && menu.id === chapter.id && <div className="context-menu"><button onClick={() => renameItem('chapter', chapter.id)}>Rename</button><button className="danger-text" onClick={() => removeItem('chapter', chapter.id)}>Delete</button></div>}
                 </div>
                 {chapterProgressCards.length > 0 && <div className="chapter-progress-row"><SegmentedProgress cards={chapterProgressCards} className="chapter-progress-bar" /><strong>{chapterCompletion}%</strong></div>}
@@ -354,7 +374,7 @@ function App() {
             </aside>
             <div className="chapter-workspace">
               {activeChapter ? <>
-                <div className="workspace-header"><div><h2>{activeChapter.name}</h2><span>{chapterCards.length} flashcards</span></div><div className="workspace-actions"><input ref={csvInput} hidden type="file" accept=".csv,text/csv" onChange={(event) => importCsv(event.target.files?.[0])} /><button className="button secondary deck-study-button" onClick={() => startStudy(deckChapters.map((chapter) => chapter.id))}><GraduationCap size={16} /> Study deck</button><button className="button secondary" onClick={() => csvInput.current?.click()}><FileUp size={16} /> Import CSV</button><button className="button primary" onClick={() => addCard()}><Plus size={17} /> New card</button></div></div>
+                <div className="workspace-header"><div><h2>{activeChapter.name}</h2><span>{chapterCards.length} flashcards</span></div><div className="workspace-actions"><input ref={csvInput} hidden type="file" accept=".csv,text/csv" onChange={(event) => importCsv(event.target.files?.[0])} /><button className="button secondary deck-study-button" onClick={() => startStudy(deckChapters.map((chapter) => chapter.id))}><GraduationCap size={16} /> Study deck</button><button className="button secondary" onClick={() => csvInput.current?.click()}><FileUp size={16} /> Import CSV</button><button className="button primary" onClick={() => addCard(true)}><Plus size={17} /> New card</button></div></div>
                 <div className="column-labels"><span>QUESTION</span><span>ANSWER <small>MARKDOWN</small></span></div>
                 <div className="cards-list">
                   {chapterCards.map((card, index) => <article key={card.id} className="editor-card">
@@ -366,7 +386,7 @@ function App() {
                     </div>
                   </article>)}
                 </div>
-                {!chapterCards.length && <div className="empty-state compact"><div className="empty-illustration"><CircleHelp size={27} /></div><h3>This chapter is ready</h3><p>Add a card or import a CSV with questions and answers.</p><div className="empty-actions"><button className="button primary" onClick={() => addCard()}><Plus size={16} /> Add card</button><button className="button secondary" onClick={() => csvInput.current?.click()}><Upload size={16} /> Import CSV</button></div></div>}
+                {!chapterCards.length && <div className="empty-state compact"><div className="empty-illustration"><CircleHelp size={27} /></div><h3>This chapter is ready</h3><p>Add a card or import a CSV with questions and answers.</p><div className="empty-actions"><button className="button primary" onClick={() => addCard(true)}><Plus size={16} /> Add card</button><button className="button secondary" onClick={() => csvInput.current?.click()}><Upload size={16} /> Import CSV</button></div></div>}
                 <input ref={fileInput} hidden type="file" accept="image/*" onChange={(event) => uploadImage(event.target.files?.[0])} />
               </> : <div className="empty-state compact"><div className="empty-illustration"><FolderPlus size={28} /></div><h3>Choose a chapter</h3><p>Open a chapter from the list or create a new one.</p><button className="button primary" onClick={addNewChapter}><Plus size={16} /> Create chapter</button></div>}
             </div>
