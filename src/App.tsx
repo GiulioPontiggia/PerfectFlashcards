@@ -5,12 +5,12 @@ import remarkGfm from 'remark-gfm';
 import Papa from 'papaparse';
 import {
   ArrowLeft, BookOpen, Check, ChevronDown, ChevronRight, CircleHelp, Cloud, FileUp,
-  FolderPlus, GraduationCap, ImagePlus, Layers3, LogOut, MoreHorizontal, Plus, Search,
+  FolderPlus, GraduationCap, GripVertical, ImagePlus, Layers3, LogOut, MoreHorizontal, Plus, Search,
   Sparkles, Trash2, Upload, X,
 } from 'lucide-react';
 import { auth, firebaseConfigured, googleProvider } from './firebase';
 import {
-  createCard, createCards, createChapter, createDeck, removeCard, deleteChapter,
+  createCard, createCards, createChapter, createDeck, removeCard, deleteChapter, reorderChapters,
   deleteDeck, saveProfile, updateCard, updateChapter, updateDeck, watchCards,
   watchChapters, watchDecks,
 } from './data';
@@ -77,6 +77,8 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
   const [menu, setMenu] = useState<{ kind: 'deck' | 'chapter'; id: string } | null>(null);
+  const [draggedChapterId, setDraggedChapterId] = useState('');
+  const [dropTargetChapterId, setDropTargetChapterId] = useState('');
   const [uploadingId, setUploadingId] = useState('');
   const [pendingFocusCardId, setPendingFocusCardId] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
@@ -144,7 +146,12 @@ function App() {
   }, [activeDeckId, activeChapterId, chapters]);
 
   const activeDeck = decks.find((deck) => deck.id === activeDeckId);
-  const deckChapters = useMemo(() => chapters.filter((chapter) => chapter.deckId === activeDeckId), [chapters, activeDeckId]);
+  const deckChapters = useMemo(() => chapters.filter((chapter) => chapter.deckId === activeDeckId).sort((a, b) => {
+    if (a.position != null && b.position != null) return a.position - b.position;
+    if (a.position != null) return -1;
+    if (b.position != null) return 1;
+    return a.createdAt - b.createdAt || a.id.localeCompare(b.id);
+  }), [chapters, activeDeckId]);
   const activeChapter = chapters.find((chapter) => chapter.id === activeChapterId);
   const chapterCards = useMemo(() => cards.filter((card) => card.chapterId === activeChapterId).sort((a, b) => a.createdAt - b.createdAt), [cards, activeChapterId]);
   const filteredDecks = decks.filter((deck) => deck.name.toLowerCase().includes(search.toLowerCase()));
@@ -306,6 +313,28 @@ function App() {
       : [...new Set([...current, ...chapterIds])]);
   }
 
+  function finishChapterDrop(targetId: string) {
+    if (!draggedChapterId || draggedChapterId === targetId) {
+      setDraggedChapterId('');
+      setDropTargetChapterId('');
+      return;
+    }
+    const reordered = [...deckChapters];
+    const fromIndex = reordered.findIndex((chapter) => chapter.id === draggedChapterId);
+    const toIndex = reordered.findIndex((chapter) => chapter.id === targetId);
+    if (fromIndex < 0 || toIndex < 0) return;
+    const [movedChapter] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, movedChapter);
+    const chapterIds = reordered.map((chapter) => chapter.id);
+    setChapters((current) => current.map((chapter) => {
+      const position = chapterIds.indexOf(chapter.id);
+      return position < 0 ? chapter : { ...chapter, position };
+    }));
+    setDraggedChapterId('');
+    setDropTargetChapterId('');
+    void run(() => reorderChapters(chapterIds));
+  }
+
   if (!firebaseConfigured) return <ConfigurationScreen />;
   if (!user) return <LoginScreen onLogin={() => auth && signInWithPopup(auth, googleProvider).catch((error: unknown) => setToast(friendlyError(error)))} toast={toast} />;
 
@@ -359,9 +388,10 @@ function App() {
               {deckChapters.map((chapter) => {
                 const chapterProgressCards = cards.filter((card) => card.chapterId === chapter.id);
                 const chapterCompletion = progressFor(chapterProgressCards).percentage;
-                return <div key={chapter.id} className="chapter-list-item">
+                return <div key={chapter.id} className={`chapter-list-item ${dropTargetChapterId === chapter.id ? 'chapter-drop-target' : ''} ${draggedChapterId === chapter.id ? 'chapter-dragging' : ''}`} onDragOver={(event) => { event.preventDefault(); setDropTargetChapterId(chapter.id); }} onDrop={(event) => { event.preventDefault(); finishChapterDrop(chapter.id); }}>
                 <div className={`chapter-nav-row ${chapter.id === activeChapterId ? 'current' : ''}`}>
                 <button onClick={() => { setActiveChapterId(chapter.id); setScreen('chapter'); }}><BookOpen size={16} /><span>{chapter.name}</span><small>{chapterProgressCards.length}</small></button>
+                <button className="chapter-drag-handle" type="button" draggable aria-label={`Reorder ${chapter.name}`} title="Drag to reorder" onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', chapter.id); setDraggedChapterId(chapter.id); }} onDragEnd={() => { setDraggedChapterId(''); setDropTargetChapterId(''); }}><GripVertical size={16} /></button>
                 <input aria-label={`Select ${chapter.name} for study`} className="chapter-study-check" type="checkbox" checked={selectedStudyChapters.includes(chapter.id)} onChange={() => toggleChapterForStudy(chapter.id)} />
                 <button className="icon-button menu-trigger" title="Chapter options" onClick={() => setMenu(menu?.id === chapter.id ? null : { kind: 'chapter', id: chapter.id })}><MoreHorizontal size={16} /></button>
                 {menu?.kind === 'chapter' && menu.id === chapter.id && <div className="context-menu"><button onClick={() => renameItem('chapter', chapter.id)}>Rename</button><button className="danger-text" onClick={() => removeItem('chapter', chapter.id)}>Delete</button></div>}

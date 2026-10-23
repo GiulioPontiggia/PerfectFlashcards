@@ -83,6 +83,16 @@ export async function updateDeck(id: string, name: string) {
 export async function updateChapter(id: string, name: string) {
   await updateDoc(doc(database(), 'chapters', id), { name });
 }
+export async function reorderChapters(chapterIds: string[]) {
+  const firestore = database();
+  for (let offset = 0; offset < chapterIds.length; offset += 450) {
+    const batch = writeBatch(firestore);
+    chapterIds.slice(offset, offset + 450).forEach((id, index) => {
+      batch.update(doc(firestore, 'chapters', id), { position: offset + index });
+    });
+    await batch.commit();
+  }
+}
 export async function updateCard(id: string, patch: Partial<Pick<Flashcard, 'question' | 'answer' | 'rating' | 'lastReviewedAt'>>) {
   await updateDoc(doc(database(), 'flashcards', id), patch);
 }

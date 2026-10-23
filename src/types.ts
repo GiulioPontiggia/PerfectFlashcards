@@ -11,6 +11,7 @@ export interface Chapter {
   userId: string;
   name: string;
   createdAt: number;
+  position?: number;
 }
 
 export interface Flashcard {
