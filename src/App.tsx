@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import Papa from 'papaparse';
 import {
   ArrowLeft, BookOpen, Check, ChevronDown, ChevronRight, CircleHelp, Cloud, FileUp,
@@ -21,6 +24,8 @@ type Draft = { question?: string; answer?: string };
 const imageEditorTag = '🖼 Image';
 const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined;
 const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined;
+const markdownRemarkPlugins = [remarkGfm, remarkMath];
+const markdownRehypePlugins = [rehypeKatex];
 
 function progressFor(cards: Flashcard[]) {
   const gradeCounts = [0, 0, 0, 0, 0];
@@ -411,7 +416,7 @@ function App() {
                     <div className="card-number">{String(index + 1).padStart(2, '0')}</div>
                     <div className="editor-column"><textarea ref={(element) => { questionInputs.current[card.id] = element; }} aria-label={`Question ${index + 1}`} placeholder="Write a question…" value={drafts[card.id]?.question ?? card.question} onChange={(event) => setDrafts((previous) => ({ ...previous, [card.id]: { ...previous[card.id], question: event.target.value } }))} onBlur={(event) => saveField(card, 'question', event.target.value)} /></div>
                     <div className="editor-column answer-column">
-                      {preview[card.id] ? <div className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]}>{drafts[card.id]?.answer ?? card.answer}</ReactMarkdown></div> : <textarea aria-label={`Answer ${index + 1}`} placeholder="Write an answer… Markdown supported" value={imageMarkdownToEditor(drafts[card.id]?.answer ?? card.answer)} onChange={(event) => setDrafts((previous) => ({ ...previous, [card.id]: { ...previous[card.id], answer: imageEditorToMarkdown(event.target.value, previous[card.id]?.answer ?? card.answer) } }))} onBlur={(event) => saveField(card, 'answer', event.target.value)} onKeyDown={(event) => { if (event.key === 'Tab' && !event.shiftKey && index === chapterCards.length - 1) { event.preventDefault(); void addCard(true); } }} onPaste={(event) => { const imageItem = Array.from(event.clipboardData.items).find((item) => item.type.startsWith('image/')); const imageFile = imageItem?.getAsFile(); if (imageFile) { event.preventDefault(); void uploadImage(imageFile, card.id); } }} />}
+                      {preview[card.id] ? <div className="markdown-preview"><ReactMarkdown remarkPlugins={markdownRemarkPlugins} rehypePlugins={markdownRehypePlugins}>{drafts[card.id]?.answer ?? card.answer}</ReactMarkdown></div> : <textarea aria-label={`Answer ${index + 1}`} placeholder="Write an answer… Markdown and LaTeX supported" value={imageMarkdownToEditor(drafts[card.id]?.answer ?? card.answer)} onChange={(event) => setDrafts((previous) => ({ ...previous, [card.id]: { ...previous[card.id], answer: imageEditorToMarkdown(event.target.value, previous[card.id]?.answer ?? card.answer) } }))} onBlur={(event) => saveField(card, 'answer', event.target.value)} onKeyDown={(event) => { if (event.key === 'Tab' && !event.shiftKey && index === chapterCards.length - 1) { event.preventDefault(); void addCard(true); } }} onPaste={(event) => { const imageItem = Array.from(event.clipboardData.items).find((item) => item.type.startsWith('image/')); const imageFile = imageItem?.getAsFile(); if (imageFile) { event.preventDefault(); void uploadImage(imageFile, card.id); } }} />}
                       <div className="editor-tools"><button title="Upload an image" onClick={() => { setUploadingId(card.id); fileInput.current?.click(); }}><ImagePlus size={15} /> Image</button><button onClick={() => setPreview((previous) => ({ ...previous, [card.id]: !previous[card.id] }))}>{preview[card.id] ? 'Edit' : 'Preview'}</button><button className="delete-card" title="Delete flashcard" onClick={() => window.confirm('Delete this flashcard?') && run(() => removeCard(card.id))}><Trash2 size={15} /></button></div>
                     </div>
                   </article>)}
@@ -426,7 +431,7 @@ function App() {
         {screen === 'study' && <section className="study-page"><div className="study-top"><button className="back-link" onClick={() => setScreen('library')}><ArrowLeft size={16} /> Exit study</button><span className="study-batch">STUDY BATCH
           <span>{studyIndex + 1} / {studyQueue.length}</span></span></div>
           <div className="study-progress"><span style={{ width: `${(studyIndex / Math.max(studyQueue.length, 1)) * 100}%` }} /></div>
-          {currentStudyCard ? <div className="study-center"><div className="study-kicker"><GraduationCap size={16} /> {chapters.find((chapter) => chapter.id === currentStudyCard.chapterId)?.name ?? 'FLASHCARD'}</div><div className="study-card"><div className="study-card-label">{revealed ? 'ANSWER' : 'QUESTION'}</div><div className="study-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{revealed ? currentStudyCard.answer : currentStudyCard.question}</ReactMarkdown></div>{!revealed ? <button className="button primary reveal-button" onClick={() => setRevealed(true)}>Show answer <ChevronDown size={16} /></button> : <div className="rating-area"><span>How well did you know it?</span><div className="rating-buttons">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} aria-label={`Grade ${rating}`} className={`rating-button rating-${rating}`} onClick={() => rateAndContinue(rating)} disabled={busy}><span>{rating}</span></button>)}</div></div>}</div><div className="study-hint"><span>Space</span> to reveal the answer <span>·</span> Be honest with yourself</div></div> : <div className="empty-state"><h3>No cards to study</h3>
+          {currentStudyCard ? <div className="study-center"><div className="study-kicker"><GraduationCap size={16} /> {chapters.find((chapter) => chapter.id === currentStudyCard.chapterId)?.name ?? 'FLASHCARD'}</div><div className="study-card"><div className="study-card-label">{revealed ? 'ANSWER' : 'QUESTION'}</div><div className="study-markdown"><ReactMarkdown remarkPlugins={markdownRemarkPlugins} rehypePlugins={markdownRehypePlugins}>{revealed ? currentStudyCard.answer : currentStudyCard.question}</ReactMarkdown></div>{!revealed ? <button className="button primary reveal-button" onClick={() => setRevealed(true)}>Show answer <ChevronDown size={16} /></button> : <div className="rating-area"><span>How well did you know it?</span><div className="rating-buttons">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} aria-label={`Grade ${rating}`} className={`rating-button rating-${rating}`} onClick={() => rateAndContinue(rating)} disabled={busy}><span>{rating}</span></button>)}</div></div>}</div><div className="study-hint"><span>Space</span> to reveal the answer <span>·</span> Be honest with yourself</div></div> : <div className="empty-state"><h3>No cards to study</h3>
             <button className="button primary" onClick={() => setScreen('library')}>Back to library</button></div>}
         </section>}
 

@@ -13,7 +13,7 @@ A single-page app for creating and studying Markdown flashcards, with Google Sig
 
 ## Usage
 
-- Create decks and chapters, then add flashcards. Questions and answers support Markdown and preview.
+- Create decks and chapters, then add flashcards. Questions and answers support Markdown and preview. Answers also support LaTeX math: use `$...$` for inline formulas and `$$...$$` for display formulas. The editor keeps the source text visible; Preview and Study render the formatted math.
 - Import CSV: column A is the question and column B is the answer. Use CSV quotes for fields containing commas. Do not include a header row.
 - Upload images from the Answer column: the Cloudinary HTTPS Markdown link is inserted automatically.
 - Study an entire deck or select multiple chapters. Each batch contains 10 cards; if fewer than 10 are available, cards repeat in the batch. Cards with lower ratings are prioritized, with ties shuffled randomly.
