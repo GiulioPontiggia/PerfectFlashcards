@@ -4,11 +4,13 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import rehypeHighlight from 'rehype-highlight';
 import 'katex/dist/katex.min.css';
+import 'highlight.js/styles/github-dark.css';
 import Papa from 'papaparse';
 import {
   ArrowLeft, BookOpen, Check, ChevronDown, ChevronRight, CircleHelp, Cloud, FileUp,
-  FolderPlus, GraduationCap, GripVertical, ImagePlus, Layers3, LogOut, MoreHorizontal, Plus, Search,
+  Code2, FolderPlus, GraduationCap, GripVertical, ImagePlus, Layers3, LogOut, MoreHorizontal, Plus, Search,
   Sparkles, Trash2, Upload, X,
 } from 'lucide-react';
 import { auth, firebaseConfigured, googleProvider } from './firebase';
@@ -25,7 +27,8 @@ const imageEditorTag = '🖼 Image';
 const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined;
 const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined;
 const markdownRemarkPlugins = [remarkGfm, remarkMath];
-const markdownRehypePlugins = [rehypeKatex];
+const markdownRehypePlugins = [rehypeKatex, rehypeHighlight];
+const codeLanguages = ['plaintext', 'javascript', 'typescript', 'python', 'java', 'c', 'cpp', 'csharp', 'go', 'rust', 'html', 'css', 'json', 'bash', 'sql', 'markdown'];
 
 function progressFor(cards: Flashcard[]) {
   const gradeCounts = [0, 0, 0, 0, 0];
@@ -85,10 +88,12 @@ function App() {
   const [draggedChapterId, setDraggedChapterId] = useState('');
   const [dropTargetChapterId, setDropTargetChapterId] = useState('');
   const [uploadingId, setUploadingId] = useState('');
+  const [codeLanguage, setCodeLanguage] = useState('javascript');
   const [pendingFocusCardId, setPendingFocusCardId] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
   const csvInput = useRef<HTMLInputElement>(null);
   const questionInputs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const answerInputs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   useEffect(() => {
     if (!auth) return;
@@ -237,6 +242,30 @@ function App() {
       : value;
     if (updatedValue === card[field]) return;
     await run(() => updateCard(card.id, { [field]: updatedValue }));
+  }
+
+  function insertCodeBlock(card: Flashcard) {
+    const textarea = answerInputs.current[card.id];
+    const currentMarkdown = drafts[card.id]?.answer ?? card.answer;
+    const editorValue = imageMarkdownToEditor(currentMarkdown);
+    const start = textarea?.selectionStart ?? editorValue.length;
+    const end = textarea?.selectionEnd ?? editorValue.length;
+    const before = editorValue.slice(0, start);
+    const selected = editorValue.slice(start, end);
+    const after = editorValue.slice(end);
+    const prefix = before && !before.endsWith('\n\n') ? (before.endsWith('\n') ? '\n' : '\n\n') : '';
+    const suffix = after && !after.startsWith('\n') ? '\n\n' : (after ? '\n' : '');
+    const codeBlockStart = `\`\`\`${codeLanguage}\n`;
+    const nextEditorValue = `${before}${prefix}${codeBlockStart}${selected}\n\`\`\`${suffix}${after}`;
+    const answer = imageEditorToMarkdown(nextEditorValue, currentMarkdown);
+    const cursorPosition = before.length + prefix.length + codeBlockStart.length;
+    setDrafts((previous) => ({ ...previous, [card.id]: { ...previous[card.id], answer } }));
+    setPreview((previous) => ({ ...previous, [card.id]: false }));
+    requestAnimationFrame(() => {
+      const input = answerInputs.current[card.id];
+      input?.focus();
+      input?.setSelectionRange(cursorPosition, cursorPosition);
+    });
   }
 
   async function importCsv(file?: File) {
@@ -416,8 +445,8 @@ function App() {
                     <div className="card-number">{String(index + 1).padStart(2, '0')}</div>
                     <div className="editor-column"><textarea ref={(element) => { questionInputs.current[card.id] = element; }} aria-label={`Question ${index + 1}`} placeholder="Write a question…" value={drafts[card.id]?.question ?? card.question} onChange={(event) => setDrafts((previous) => ({ ...previous, [card.id]: { ...previous[card.id], question: event.target.value } }))} onBlur={(event) => saveField(card, 'question', event.target.value)} /></div>
                     <div className="editor-column answer-column">
-                      {preview[card.id] ? <div className="markdown-preview"><ReactMarkdown remarkPlugins={markdownRemarkPlugins} rehypePlugins={markdownRehypePlugins}>{drafts[card.id]?.answer ?? card.answer}</ReactMarkdown></div> : <textarea aria-label={`Answer ${index + 1}`} placeholder="Write an answer… Markdown and LaTeX supported" value={imageMarkdownToEditor(drafts[card.id]?.answer ?? card.answer)} onChange={(event) => setDrafts((previous) => ({ ...previous, [card.id]: { ...previous[card.id], answer: imageEditorToMarkdown(event.target.value, previous[card.id]?.answer ?? card.answer) } }))} onBlur={(event) => saveField(card, 'answer', event.target.value)} onKeyDown={(event) => { if (event.key === 'Tab' && !event.shiftKey && index === chapterCards.length - 1) { event.preventDefault(); void addCard(true); } }} onPaste={(event) => { const imageItem = Array.from(event.clipboardData.items).find((item) => item.type.startsWith('image/')); const imageFile = imageItem?.getAsFile(); if (imageFile) { event.preventDefault(); void uploadImage(imageFile, card.id); } }} />}
-                      <div className="editor-tools"><button title="Upload an image" onClick={() => { setUploadingId(card.id); fileInput.current?.click(); }}><ImagePlus size={15} /> Image</button><button onClick={() => setPreview((previous) => ({ ...previous, [card.id]: !previous[card.id] }))}>{preview[card.id] ? 'Edit' : 'Preview'}</button><button className="delete-card" title="Delete flashcard" onClick={() => window.confirm('Delete this flashcard?') && run(() => removeCard(card.id))}><Trash2 size={15} /></button></div>
+                      {preview[card.id] ? <div className="markdown-preview"><ReactMarkdown remarkPlugins={markdownRemarkPlugins} rehypePlugins={markdownRehypePlugins}>{drafts[card.id]?.answer ?? card.answer}</ReactMarkdown></div> : <textarea ref={(element) => { answerInputs.current[card.id] = element; }} aria-label={`Answer ${index + 1}`} placeholder="Write an answer… Markdown and LaTeX supported" value={imageMarkdownToEditor(drafts[card.id]?.answer ?? card.answer)} onChange={(event) => setDrafts((previous) => ({ ...previous, [card.id]: { ...previous[card.id], answer: imageEditorToMarkdown(event.target.value, previous[card.id]?.answer ?? card.answer) } }))} onBlur={(event) => saveField(card, 'answer', event.target.value)} onKeyDown={(event) => { if (event.key === 'Tab' && !event.shiftKey && index === chapterCards.length - 1) { event.preventDefault(); void addCard(true); } }} onPaste={(event) => { const imageItem = Array.from(event.clipboardData.items).find((item) => item.type.startsWith('image/')); const imageFile = imageItem?.getAsFile(); if (imageFile) { event.preventDefault(); void uploadImage(imageFile, card.id); } }} />}
+                      <div className="editor-tools"><button title="Upload an image" onClick={() => { setUploadingId(card.id); fileInput.current?.click(); }}><ImagePlus size={15} /> Image</button><div className="code-tool"><button title="Insert a code block" onClick={() => insertCodeBlock(card)}><Code2 size={15} /> Code</button><select aria-label="Code language" value={codeLanguage} onChange={(event) => setCodeLanguage(event.target.value)}>{codeLanguages.map((language) => <option key={language} value={language}>{language}</option>)}</select></div><button onClick={() => setPreview((previous) => ({ ...previous, [card.id]: !previous[card.id] }))}>{preview[card.id] ? 'Edit' : 'Preview'}</button><button className="delete-card" title="Delete flashcard" onClick={() => window.confirm('Delete this flashcard?') && run(() => removeCard(card.id))}><Trash2 size={15} /></button></div>
                     </div>
                   </article>)}
                 </div>

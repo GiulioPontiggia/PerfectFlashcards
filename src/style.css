@@ -55,3 +55,12 @@
 .chapter-layout{grid-template-columns:250px minmax(0,1fr)}
 @media(max-width:1100px){.chapter-layout{grid-template-columns:215px minmax(0,1fr)}}
 @media(max-width:760px){.chapter-layout{display:block}}
+
+.code-tool{display:flex;align-items:center;gap:4px}
+.editor-tools .code-tool>button{display:flex;align-items:center;gap:4px}
+.code-tool select{height:22px;max-width:100px;padding:0 4px;border:1px solid #e5e9e1;border-radius:5px;background:#fff;color:#687164;font-size:10px;text-transform:capitalize}
+.markdown-preview pre,.study-markdown pre{overflow:auto;padding:14px 16px;border-radius:9px;background:#0d1117;color:#e6edf3;font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace}
+.markdown-preview pre code,.study-markdown pre code{font:inherit}
+.markdown-preview :not(pre)>code,.study-markdown :not(pre)>code{padding:2px 5px;border-radius:4px;background:#edf0eb;color:#405b46;font:12px ui-monospace,SFMono-Regular,Consolas,monospace}
+.markdown-preview pre code.hljs,.study-markdown pre code.hljs{padding:0;background:transparent}
+@media(max-width:760px){.code-tool select{max-width:82px}.editor-tools .code-tool>button{gap:3px}}
