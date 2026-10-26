@@ -67,3 +67,21 @@
 .study-markdown.study-answer ul,.study-markdown.study-answer ol{font:inherit}
 .study-markdown ul,.study-markdown ol{align-self:stretch;width:100%;max-width:100%;margin:0;padding-inline-start:1.5em;text-align:left}
 @media(max-width:760px){.code-tool select{max-width:82px}.editor-tools .code-tool>button{gap:3px}}
+
+.study-card{position:relative;padding-top:58px}
+.study-card-tools{position:absolute;top:16px;left:18px;right:18px;display:flex;align-items:center;justify-content:space-between;min-height:30px}
+.last-grade{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;font-size:13px;font-weight:800;box-shadow:inset 0 0 0 1px #0000000a}
+.last-grade.grade-1{background:#d9ddd4;color:#61695d}
+.last-grade.grade-2{background:#d0dfbd;color:#586a48}
+.last-grade.grade-3{background:#b1d29a;color:#48673d}
+.last-grade.grade-4{background:#83b778;color:#294c2b}
+.last-grade.grade-5{background:#4f805b;color:#fff}
+.study-edit-button{display:flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #e5e9e1;border-radius:8px;background:#fff;color:#62705e;font-size:12px;font-weight:600}
+.study-edit-button:hover{background:#f1f5ed;color:#355c46}
+.study-edit-form{display:grid;gap:13px;width:100%;text-align:left}
+.study-edit-form label{display:grid;gap:6px;color:#737c70;font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase}
+.study-edit-form textarea{width:100%;min-height:82px;padding:11px 12px;border:1px solid #e2e7de;border-radius:9px;background:#fbfcfa;color:var(--ink);font-size:14px;line-height:1.5;resize:vertical}
+.study-edit-form textarea:focus{outline:2px solid #a9c49a;border-color:transparent}
+.study-edit-actions{display:flex;justify-content:flex-end;gap:8px}
+.study-edit-actions .button{padding:9px 13px;font-size:12px}
+@media(max-width:760px){.study-card{padding-top:55px}.study-card-tools{top:13px;left:13px;right:13px}.study-edit-form textarea{font-size:13px}}

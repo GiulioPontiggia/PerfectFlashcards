@@ -10,7 +10,7 @@ import 'highlight.js/styles/github-dark.css';
 import Papa from 'papaparse';
 import {
   ArrowLeft, BookOpen, Check, ChevronDown, ChevronRight, CircleHelp, Cloud, FileUp,
-  Code2, FolderPlus, GraduationCap, GripVertical, ImagePlus, Layers3, LogOut, MoreHorizontal, Plus, Search,
+  Code2, FolderPlus, GraduationCap, GripVertical, ImagePlus, Layers3, LogOut, MoreHorizontal, Pencil, Plus, Search,
   Sparkles, Trash2, Upload, X,
 } from 'lucide-react';
 import { auth, firebaseConfigured, googleProvider } from './firebase';
@@ -89,6 +89,7 @@ function App() {
   const [studyQueue, setStudyQueue] = useState<string[]>([]);
   const [studyIndex, setStudyIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
+  const [studyEdit, setStudyEdit] = useState<{ cardId: string; question: string; answer: string } | null>(null);
   const [toast, setToast] = useState('');
   const [busy, setBusy] = useState(false);
   const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
@@ -355,6 +356,22 @@ function App() {
     });
   }
 
+  async function saveStudyEdit() {
+    if (!currentStudyCard || !studyEdit || studyEdit.cardId !== currentStudyCard.id) return;
+    const { question, answer } = studyEdit;
+    setBusy(true);
+    try {
+      await updateCard(currentStudyCard.id, { question, answer });
+      setCards((previous) => previous.map((card) => card.id === currentStudyCard.id ? { ...card, question, answer } : card));
+      setStudyEdit(null);
+      setToast('Flashcard updated');
+    } catch (error) {
+      setToast(friendlyError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function toggleChapterForStudy(id: string) {
     setSelectedStudyChapters((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   }
@@ -480,7 +497,17 @@ function App() {
         {screen === 'study' && <section className="study-page"><div className="study-top"><button className="back-link" onClick={() => setScreen('library')}><ArrowLeft size={16} /> Exit study</button><span className="study-batch">STUDY BATCH
           <span>{studyIndex + 1} / {studyQueue.length}</span></span></div>
           <div className="study-progress"><span style={{ width: `${(studyIndex / Math.max(studyQueue.length, 1)) * 100}%` }} /></div>
-          {currentStudyCard ? <div className="study-center"><div className="study-kicker"><GraduationCap size={16} /> {chapters.find((chapter) => chapter.id === currentStudyCard.chapterId)?.name ?? 'FLASHCARD'}</div><div className="study-card"><div className="study-card-label">{revealed ? 'ANSWER' : 'QUESTION'}</div><div className={`study-markdown${revealed ? ' study-answer' : ''}`} onClick={() => { if (revealed) setRevealed(false); }}><ReactMarkdown remarkPlugins={markdownRemarkPlugins} rehypePlugins={markdownRehypePlugins} components={revealed ? studyAnswerComponents : undefined}>{revealed ? currentStudyCard.answer : currentStudyCard.question}</ReactMarkdown></div>{!revealed ? <button className="button primary reveal-button" onClick={() => setRevealed(true)}>Show answer <ChevronDown size={16} /></button> : <div className="rating-area"><span>How well did you know it?</span><div className="rating-buttons">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} aria-label={`Grade ${rating}`} className={`rating-button rating-${rating}`} onClick={() => rateAndContinue(rating)} disabled={busy}><span>{rating}</span></button>)}</div></div>}</div><div className="study-hint"><span>Space</span> to {revealed ? 'show the question' : 'reveal the answer'}{revealed && <> <span>·</span> Click the answer to show the question</>} <span>·</span> Be honest with yourself</div></div> : <div className="empty-state"><h3>No cards to study</h3>
+          {currentStudyCard ? <div className="study-center"><div className="study-kicker"><GraduationCap size={16} /> {chapters.find((chapter) => chapter.id === currentStudyCard.chapterId)?.name ?? 'FLASHCARD'}</div><div className="study-card">
+            <div className="study-card-tools">
+              {currentStudyCard.lastReviewedAt != null && <span className={`last-grade grade-${currentStudyCard.rating + 1}`} aria-label={`Last grade: ${currentStudyCard.rating + 1}`} title={`Last grade: ${currentStudyCard.rating + 1}`}>{currentStudyCard.rating + 1}</span>}
+              <button className="study-edit-button" type="button" onClick={() => setStudyEdit({ cardId: currentStudyCard.id, question: currentStudyCard.question, answer: currentStudyCard.answer })} aria-label="Edit flashcard" title="Edit flashcard"><Pencil size={15} /><span>Edit</span></button>
+            </div>
+            {studyEdit?.cardId === currentStudyCard.id ? <div className="study-edit-form">
+              <label>Question<textarea aria-label="Edit question" value={studyEdit.question} onChange={(event) => setStudyEdit((current) => current ? { ...current, question: event.target.value } : current)} /></label>
+              <label>Answer<textarea aria-label="Edit answer" value={studyEdit.answer} onChange={(event) => setStudyEdit((current) => current ? { ...current, answer: event.target.value } : current)} /></label>
+              <div className="study-edit-actions"><button className="button secondary" type="button" onClick={() => setStudyEdit(null)} disabled={busy}>Cancel</button><button className="button primary" type="button" onClick={saveStudyEdit} disabled={busy}><Check size={15} /> Save</button></div>
+            </div> : <><div className="study-card-label">{revealed ? 'ANSWER' : 'QUESTION'}</div><div className={`study-markdown${revealed ? ' study-answer' : ''}`} onClick={() => { if (revealed) setRevealed(false); }}><ReactMarkdown remarkPlugins={markdownRemarkPlugins} rehypePlugins={markdownRehypePlugins} components={revealed ? studyAnswerComponents : undefined}>{revealed ? currentStudyCard.answer : currentStudyCard.question}</ReactMarkdown></div>{!revealed ? <button className="button primary reveal-button" onClick={() => setRevealed(true)}>Show answer <ChevronDown size={16} /></button> : <div className="rating-area"><span>How well did you know it?</span><div className="rating-buttons">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} aria-label={`Grade ${rating}`} className={`rating-button rating-${rating}`} onClick={() => rateAndContinue(rating)} disabled={busy}><span>{rating}</span></button>)}</div></div>}</>}
+          </div><div className="study-hint"><span>Space</span> to {revealed ? 'show the question' : 'reveal the answer'}{revealed && <> <span>·</span> Click the answer to show the question</>} <span>·</span> Be honest with yourself</div></div> : <div className="empty-state"><h3>No cards to study</h3>
             <button className="button primary" onClick={() => setScreen('library')}>Back to library</button></div>}
         </section>}
 
