@@ -65,4 +65,5 @@
 .markdown-preview pre code.hljs,.study-markdown pre code.hljs{padding:0;background:transparent}
 .study-markdown.study-answer{font:400 16px/1.65 'DM Sans',sans-serif}
 .study-markdown.study-answer ul,.study-markdown.study-answer ol{font:inherit}
+.study-markdown ul,.study-markdown ol{align-self:stretch;width:100%;max-width:100%;margin:0;padding-inline-start:1.5em;text-align:left}
 @media(max-width:760px){.code-tool select{max-width:82px}.editor-tools .code-tool>button{gap:3px}}
