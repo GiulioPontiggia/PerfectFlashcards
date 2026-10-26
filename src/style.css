@@ -63,4 +63,6 @@
 .markdown-preview pre code,.study-markdown pre code{font:inherit}
 .markdown-preview :not(pre)>code,.study-markdown :not(pre)>code{padding:2px 5px;border-radius:4px;background:#edf0eb;color:#405b46;font:12px ui-monospace,SFMono-Regular,Consolas,monospace}
 .markdown-preview pre code.hljs,.study-markdown pre code.hljs{padding:0;background:transparent}
+.study-markdown.study-answer{font:400 16px/1.65 'DM Sans',sans-serif}
+.study-markdown.study-answer ul,.study-markdown.study-answer ol{font:inherit}
 @media(max-width:760px){.code-tool select{max-width:82px}.editor-tools .code-tool>button{gap:3px}}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -28,6 +28,14 @@ const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefin
 const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined;
 const markdownRemarkPlugins = [remarkGfm, remarkMath];
 const markdownRehypePlugins = [rehypeKatex, rehypeHighlight];
+const studyAnswerComponents: Components = {
+  h1: ({ children }) => <p>{children}</p>,
+  h2: ({ children }) => <p>{children}</p>,
+  h3: ({ children }) => <p>{children}</p>,
+  h4: ({ children }) => <p>{children}</p>,
+  h5: ({ children }) => <p>{children}</p>,
+  h6: ({ children }) => <p>{children}</p>,
+};
 const codeLanguages = ['plaintext', 'javascript', 'typescript', 'python', 'java', 'c', 'cpp', 'csharp', 'go', 'rust', 'html', 'css', 'json', 'bash', 'sql', 'markdown'];
 
 function progressFor(cards: Flashcard[]) {
@@ -135,6 +143,18 @@ function App() {
       window.removeEventListener('offline', markOffline);
     };
   }, []);
+
+  useEffect(() => {
+    const handleStudyKey = (event: KeyboardEvent) => {
+      if (screen !== 'study' || event.code !== 'Space' || event.repeat) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest('input, textarea, select, button, a, [contenteditable="true"], [role="button"]')) return;
+      event.preventDefault();
+      setRevealed((current) => !current);
+    };
+    document.addEventListener('keydown', handleStudyKey);
+    return () => document.removeEventListener('keydown', handleStudyKey);
+  }, [screen]);
 
   useEffect(() => {
     const closeMenuOnOutsideClick = (event: MouseEvent) => {
@@ -460,7 +480,7 @@ function App() {
         {screen === 'study' && <section className="study-page"><div className="study-top"><button className="back-link" onClick={() => setScreen('library')}><ArrowLeft size={16} /> Exit study</button><span className="study-batch">STUDY BATCH
           <span>{studyIndex + 1} / {studyQueue.length}</span></span></div>
           <div className="study-progress"><span style={{ width: `${(studyIndex / Math.max(studyQueue.length, 1)) * 100}%` }} /></div>
-          {currentStudyCard ? <div className="study-center"><div className="study-kicker"><GraduationCap size={16} /> {chapters.find((chapter) => chapter.id === currentStudyCard.chapterId)?.name ?? 'FLASHCARD'}</div><div className="study-card"><div className="study-card-label">{revealed ? 'ANSWER' : 'QUESTION'}</div><div className="study-markdown"><ReactMarkdown remarkPlugins={markdownRemarkPlugins} rehypePlugins={markdownRehypePlugins}>{revealed ? currentStudyCard.answer : currentStudyCard.question}</ReactMarkdown></div>{!revealed ? <button className="button primary reveal-button" onClick={() => setRevealed(true)}>Show answer <ChevronDown size={16} /></button> : <div className="rating-area"><span>How well did you know it?</span><div className="rating-buttons">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} aria-label={`Grade ${rating}`} className={`rating-button rating-${rating}`} onClick={() => rateAndContinue(rating)} disabled={busy}><span>{rating}</span></button>)}</div></div>}</div><div className="study-hint"><span>Space</span> to reveal the answer <span>·</span> Be honest with yourself</div></div> : <div className="empty-state"><h3>No cards to study</h3>
+          {currentStudyCard ? <div className="study-center"><div className="study-kicker"><GraduationCap size={16} /> {chapters.find((chapter) => chapter.id === currentStudyCard.chapterId)?.name ?? 'FLASHCARD'}</div><div className="study-card"><div className="study-card-label">{revealed ? 'ANSWER' : 'QUESTION'}</div><div className={`study-markdown${revealed ? ' study-answer' : ''}`} onClick={() => { if (revealed) setRevealed(false); }}><ReactMarkdown remarkPlugins={markdownRemarkPlugins} rehypePlugins={markdownRehypePlugins} components={revealed ? studyAnswerComponents : undefined}>{revealed ? currentStudyCard.answer : currentStudyCard.question}</ReactMarkdown></div>{!revealed ? <button className="button primary reveal-button" onClick={() => setRevealed(true)}>Show answer <ChevronDown size={16} /></button> : <div className="rating-area"><span>How well did you know it?</span><div className="rating-buttons">{[1, 2, 3, 4, 5].map((rating) => <button key={rating} aria-label={`Grade ${rating}`} className={`rating-button rating-${rating}`} onClick={() => rateAndContinue(rating)} disabled={busy}><span>{rating}</span></button>)}</div></div>}</div><div className="study-hint"><span>Space</span> to {revealed ? 'show the question' : 'reveal the answer'}{revealed && <> <span>·</span> Click the answer to show the question</>} <span>·</span> Be honest with yourself</div></div> : <div className="empty-state"><h3>No cards to study</h3>
             <button className="button primary" onClick={() => setScreen('library')}>Back to library</button></div>}
         </section>}
 
