@@ -456,6 +456,7 @@ function App() {
           <div className="chapter-heading"><button className="back-link" onClick={() => setScreen('library')}><ArrowLeft size={16} /> All decks</button><div className="chapter-title-row"><div><div className="eyebrow">{activeDeck?.name ?? 'YOUR DECK'}</div><h1>{activeDeck?.name ?? 'Deck'}</h1><p className="lead">Choose a chapter or create one to organize your cards.</p></div><button className="button primary" onClick={addNewChapter}><Plus size={17} /> New chapter</button></div></div>
           <div className="chapter-layout">
             <aside className="chapter-nav">
+              <button className="study-selection" disabled={!selectedStudyChapters.some((id) => deckChapters.some((chapter) => chapter.id === id))} onClick={() => startStudy(selectedStudyChapters.filter((id) => deckChapters.some((chapter) => chapter.id === id)))}><GraduationCap size={15} /> Study selection</button>
               <div className="subsection-label">CHAPTERS <button type="button" className="chapter-select-all" aria-pressed={allDeckChaptersSelected} disabled={!deckChapters.length} onClick={toggleAllChaptersForStudy}>{allDeckChaptersSelected ? 'Deselect all' : 'Select all'}</button><span>{deckChapters.length}</span></div>
               {deckChapters.map((chapter) => {
                 const chapterProgressCards = cards.filter((card) => card.chapterId === chapter.id);
@@ -472,7 +473,6 @@ function App() {
               </div>;
               })}
               {!deckChapters.length && <p className="subtle">No chapters yet.</p>}
-              <button className="study-selection" disabled={!selectedStudyChapters.some((id) => deckChapters.some((chapter) => chapter.id === id))} onClick={() => startStudy(selectedStudyChapters.filter((id) => deckChapters.some((chapter) => chapter.id === id)))}><GraduationCap size={15} /> Study selection</button>
             </aside>
             <div className="chapter-workspace">
               {activeChapter ? <>
