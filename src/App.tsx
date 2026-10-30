@@ -183,6 +183,7 @@ function App() {
     if (b.position != null) return 1;
     return a.createdAt - b.createdAt || a.id.localeCompare(b.id);
   }), [chapters, activeDeckId]);
+  const allDeckChaptersSelected = deckChapters.length > 0 && deckChapters.every((chapter) => selectedStudyChapters.includes(chapter.id));
   const activeChapter = chapters.find((chapter) => chapter.id === activeChapterId);
   const chapterCards = useMemo(() => cards.filter((card) => card.chapterId === activeChapterId).sort((a, b) => a.createdAt - b.createdAt), [cards, activeChapterId]);
   const filteredDecks = decks.filter((deck) => deck.name.toLowerCase().includes(search.toLowerCase()));
@@ -455,7 +456,7 @@ function App() {
           <div className="chapter-heading"><button className="back-link" onClick={() => setScreen('library')}><ArrowLeft size={16} /> All decks</button><div className="chapter-title-row"><div><div className="eyebrow">{activeDeck?.name ?? 'YOUR DECK'}</div><h1>{activeDeck?.name ?? 'Deck'}</h1><p className="lead">Choose a chapter or create one to organize your cards.</p></div><button className="button primary" onClick={addNewChapter}><Plus size={17} /> New chapter</button></div></div>
           <div className="chapter-layout">
             <aside className="chapter-nav">
-              <div className="subsection-label">CHAPTERS <input aria-label="Select all chapters for study" className="chapter-study-check select-all-chapters" type="checkbox" checked={deckChapters.length > 0 && deckChapters.every((chapter) => selectedStudyChapters.includes(chapter.id))} onChange={toggleAllChaptersForStudy} /><span>{deckChapters.length}</span></div>
+              <div className="subsection-label">CHAPTERS <button type="button" className="chapter-select-all" aria-pressed={allDeckChaptersSelected} disabled={!deckChapters.length} onClick={toggleAllChaptersForStudy}>{allDeckChaptersSelected ? 'Deselect all' : 'Select all'}</button><span>{deckChapters.length}</span></div>
               {deckChapters.map((chapter) => {
                 const chapterProgressCards = cards.filter((card) => card.chapterId === chapter.id);
                 const chapterCompletion = progressFor(chapterProgressCards).percentage;
